@@ -155,7 +155,7 @@ plt.savefig('./median_sub_time.png', bbox_inches='tight', dpi=200)
 
 # ### Median number of minutes played, across players on each team
 
-# In[10]:
+# In[15]:
 
 
 players_df = pd.read_csv(
@@ -163,13 +163,18 @@ players_df = pd.read_csv(
 )
 
 players_df = (players_df
-    .loc[:, [1, 3, 6, 7]]
+    .loc[:, [1, 3, 6, 7, 11, 12, 14, 15]]
     .rename(columns={
         1: 'player_name',
         3: 'team',
         6: 'matches_played',
-        7: 'minutes_played'
+        7: 'minutes_played',
+        11: 'starts',
+        12: 'min_per_start',
+        14: 'subs',
+        15: 'min_per_sub'
     })
+    .fillna(0)
 )
 
 # remove flag letters
@@ -188,11 +193,11 @@ players_df.head()
 print(players_df.team.unique())
 
 
-# In[12]:
+# In[17]:
 
 
 minutes_df = (players_df
-    .drop(columns=['player_name'])
+    .loc[:, ['team', 'minutes_played']]
     .groupby('team')
     .agg('median')
     .sort_values(by='minutes_played', ascending=False)
@@ -202,13 +207,13 @@ minutes_df = (players_df
 minutes_df.head()
 
 
-# In[13]:
+# In[18]:
 
 
 minutes_df
 
 
-# In[14]:
+# In[19]:
 
 
 sns.set({'figure.figsize': (8, 4)})
@@ -239,6 +244,66 @@ plt.title('Median minutes played per player, group stage')
 plt.xlabel('Median minutes played')
 
 plt.savefig('./median_mins_per_player.png', bbox_inches='tight', dpi=200)
+
+
+# In[25]:
+
+
+players_df['start_mins'] = players_df.starts * players_df.min_per_start
+players_df['sub_mins'] = players_df.subs * players_df.min_per_sub
+
+# sometimes these are off by one from minutes_played, that's fine
+players_df.head(15)
+
+
+# In[31]:
+
+
+sub_minutes_df = (players_df
+    .loc[:, ['team', 'start_mins', 'sub_mins']]
+    .groupby('team')
+    .agg('sum')
+    .reset_index()
+)
+sub_minutes_df['start_proportion'] = sub_minutes_df.start_mins / (sub_minutes_df.start_mins + sub_minutes_df.sub_mins)
+sub_minutes_df['sub_proportion'] = 1 - sub_minutes_df.start_proportion
+
+sorted_df = sub_minutes_df.sort_values(by='start_proportion', ascending=True)
+sorted_df.head()
+
+
+# In[61]:
+
+
+ro16_teams = ['Switzerland', 'Spain', 'Japan', 'Norway', 'Netherlands', 'South Africa',
+              'USA', 'Sweden', 'Australia', 'Denmark', 'England', 'Nigeria', 'Colombia',
+              'Jamaica', 'France', 'Morocco']
+
+plot_df = sub_minutes_df[sub_minutes_df.team.isin(ro16_teams)]
+sorted_df = plot_df.sort_values(by='start_proportion')
+sorted_df.head()
+
+
+# In[68]:
+
+
+sns.set({'figure.figsize': (8, 6)})
+
+ax = sns.barplot(
+    data=plot_df,
+    x='start_proportion', y='team', 
+    order=sorted_df.team,
+    orient='h', color='#1f77b4', alpha=0.8
+)
+ax.bar_label(ax.containers[0], fmt='%.2f')
+
+plt.title('Proportion of minutes played by starters, World Cup group stage', x=0.4, y=1.025)
+plt.xlabel('Proportion of minutes', labelpad=12)
+plt.ylabel('Team', labelpad=12)
+plt.xticks(rotation=90)
+plt.xlim(0.0, 1.02)
+
+plt.savefig('./proportion_starters.png', bbox_inches='tight', dpi=200)
 
 
 # So for the US/Sweden matchup in the round of 16, it seems fairly clear that for each of these metrics, the US has rotated “less” than Sweden, and we should probably expect Sweden’s players to be a bit fresher going into the knockout game. Whether it will matter or not, we will see.
